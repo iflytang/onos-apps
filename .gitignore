@@ -22,6 +22,6 @@ hs_err_pid*
 # target files
 */target
 
-# root directory IDE setting
-# .idea
+# root directory IDE setting, do not track all .idea, auto-create .idea
+.idea
 # !./*/.idea
