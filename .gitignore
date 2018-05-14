@@ -23,4 +23,5 @@ hs_err_pid*
 */target
 
 # root directory IDE setting
-.idea
+# .idea
+# !./*/.idea
