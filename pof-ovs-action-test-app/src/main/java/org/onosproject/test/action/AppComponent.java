@@ -104,7 +104,8 @@ public class AppComponent {
         // installOutputFlowRule(deviceId, tableId, "0a000001", 2);
         // installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installAddFieldFlowRule(deviceId, tableId, "0a000001", 2);
-        installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
+        // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
+        installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
     }
 
     public void pofTestStop() {
@@ -211,7 +212,7 @@ public class AppComponent {
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
 
-        log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+        log.info("installSetFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
     public void installAddFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
@@ -243,7 +244,7 @@ public class AppComponent {
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
 
-        log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+        log.info("installAddFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
     public void installDeleteFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
@@ -261,7 +262,7 @@ public class AppComponent {
         actions.add(action_delete_field);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
-        log.info("action_add_field: {}.", actions);
+        log.info("action_delete_field: {}.", actions);
 
         // apply
         long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
@@ -275,7 +276,45 @@ public class AppComponent {
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
 
-        log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+        log.info("installDeleteFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
+    public void installModifyFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // modified field
+        OFMatch20 FIELD_TTL = new OFMatch20();
+        FIELD_TTL.setFieldName("TTL");
+        FIELD_TTL.setFieldId(TTL);
+        FIELD_TTL.setOffset((short) 176);
+        FIELD_TTL.setLength((short) 8);
+
+        // action
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_delete_field = DefaultPofActions.modifyField(FIELD_TTL, 65535).action();
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
+        actions.add(action_delete_field);
+        actions.add(action_output);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_modify_field: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(1)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("installModifyFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
 }
