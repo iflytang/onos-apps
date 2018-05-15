@@ -1,4 +1,6 @@
-#### onos-apps
+## onos-apps
+
+### 1. why creates onos-apps?
 
 During the time of researching in SDN, it's oblivious to use SDN controller and switch. My research mainly focus on ONOS 1.11 
 and POFswitch or OVS-POF, both of which are modified to support POF protocol. I change the OVS, which is based on OVS 2.5, to 
@@ -12,3 +14,22 @@ The other apps I have ever committed can be found also in my git:
 - [ONOS-source-routing](https://github.com/iflytang/ONOS-source-routing)
 - [ONOS-byon](https://githubcom/iflytang/ONOS-byon)
 - [ONOS-mobility-management-optimalmode](https://githubcom/iflytang/ONOS-mobility-management-optimalmode)
+
+### 2. How to run onos-apps
+
+Here, I will show you instruction how to run these onos apps. And I assume that you have already run the ONOS controller. There
+are also two documents that can be referenced, see:
+
+- [ONOS buck build]()
+- [ONOS wiki: Template Application Toturial]()
+
+Then, follow the instructions as followed:
+
+- clone the source code from git
+```
+git clone git@github.com:iflytang/onos-apps.git
+```
+
+- compile and install
+
+
