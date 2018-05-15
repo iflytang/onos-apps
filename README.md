@@ -1,6 +1,6 @@
 ## onos-apps
 
-### 1. why creates onos-apps?
+### 1. why creates onos-apps
 
 During the time of researching in SDN, it's oblivious to use SDN controller and switch. My research mainly focus on ONOS 1.11 
 and POFswitch or OVS-POF, both of which are modified to support POF protocol. I change the OVS, which is based on OVS 2.5, to 
@@ -17,11 +17,11 @@ The other apps I have ever committed can be found also in my git:
 
 ### 2. How to run onos-apps
 
-Here, I will show you instruction how to run these onos apps. And I assume that you have already run the ONOS controller. There
+Here, I will show you instructions how to run these onos apps. And I assume that you have already run the ONOS controller. There
 are also two documents that can be referenced, see:
 
-- [ONOS buck build]()
-- [ONOS wiki: Template Application Toturial]()
+- [ONOS buck build](https://docs.google.com/document/d/1hAqBDFry2f4w9lMCAY_ieO04nWLR4gHV0uJrgV-8ovE/edit#heading=h.69a07zqxoy0r)
+- [ONOS wiki: Template Application Toturial](https://wiki.onosproject.org/display/ONOS/Template+Application+Tutorial)
 
 Then, follow the instructions as followed:
 
@@ -31,5 +31,15 @@ git clone git@github.com:iflytang/onos-apps.git
 ```
 
 - compile and install
+```
+# compile to create *.oar file
+1. mvn clean install 
+
+# install *.oar file to ONOS controller
+2. usage: onos-app <node-ip> list
+          onos-app <node-ip> {install|install!} <app-file>
+          onos-app <node-ip> {reinstall|reinstall!} [<app-name>] <app-file>
+          onos-app <node-ip> {activate|deactivate|uninstall} <app-name>
+```
 
 
