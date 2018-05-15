@@ -32,10 +32,7 @@ import org.onosproject.net.flow.criteria.Criteria;
 import org.onosproject.net.flow.criteria.Criterion;
 import org.onosproject.net.flow.instructions.DefaultPofActions;
 import org.onosproject.net.flow.instructions.DefaultPofInstructions;
-import org.onosproject.net.table.DefaultFlowTable;
-import org.onosproject.net.table.FlowTable;
-import org.onosproject.net.table.FlowTableService;
-import org.onosproject.net.table.FlowTableStore;
+import org.onosproject.net.table.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +75,9 @@ public class AppComponent {
     @Deactivate
     protected void deactivate() {
         log.info("Stopped");
-        flowRuleService.removeFlowRulesById(appId);
+        DeviceId deviceId = deviceService.getAvailableDevices().iterator().next().id();
+        // flowRuleService.removeFlowRulesById(appId);
+        flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(0));
     }
 
     /* start openflow method */
@@ -104,6 +103,7 @@ public class AppComponent {
             e.printStackTrace();
         }
         installDropFlowRule(deviceId.toString(), 0, "112233445566", 2,1);
+        installForwardFlowRule(deviceId.toString(), 0, "010203040506", 2, 1);
         log.info("installForwardFlowRule successfully.");
     }
 
@@ -190,6 +190,8 @@ public class AppComponent {
                 .fromApp(appId);
 
         flowTableService.applyFlowTables(flowTable.build());
+
+        log.info("table<{}> applied to device<{}> successfully.", tableId, deviceId.toString());
 
         return tableId;
     }
