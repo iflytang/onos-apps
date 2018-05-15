@@ -67,7 +67,11 @@ public class AppComponent {
     private DeviceId deviceId;
 
     // field_id
-    final short SIP = 1;
+    public final short DMAC = 0;
+    public final short SMAC = 1;
+    public final short TTL = 9;
+    public final short SIP = 12;
+    public final short DIP = 13;
 
     @Activate
     protected void activate() {
