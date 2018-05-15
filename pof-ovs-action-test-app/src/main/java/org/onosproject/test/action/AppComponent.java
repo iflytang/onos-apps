@@ -99,8 +99,9 @@ public class AppComponent {
             e.printStackTrace();
         }
 
-        // send flow rules
-        installOutputFlowRule(deviceId, tableId, "0a000001", 2);
+        /* send flow rules */
+        // installOutputFlowRule(deviceId, tableId, "0a000001", 2);
+        installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
     }
 
     public void pofTestStop() {
@@ -112,7 +113,7 @@ public class AppComponent {
         byte tableId = (byte) tableStore.getNewGlobalFlowTableId(deviceId, OFTableType.OF_MM_TABLE);
 
         OFMatch20 srcIP = new OFMatch20();
-        srcIP.setFieldId((short) 1);
+        srcIP.setFieldId((short) SIP);
         srcIP.setFieldName("srcIP");
         srcIP.setOffset((short) 204);
         srcIP.setLength((short) 32);
@@ -173,6 +174,38 @@ public class AppComponent {
                                                    .withPriority(1)
                                                    .withCookie(newFlowEntryId)
                                                    .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
+    public void installSetFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_set_field = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
+        actions.add(action_set_field);
+        actions.add(action_output);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_set_field: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(1)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
 
         log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
