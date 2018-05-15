@@ -31,6 +31,9 @@ git clone git@github.com:iflytang/onos-apps.git
 ```
 
 - compile and install
+
+First, come into the sub directory, for example, ```cd pof-ovs-app```. Then run:
+
 ```
 # compile to create *.oar file
 1. mvn clean install 
