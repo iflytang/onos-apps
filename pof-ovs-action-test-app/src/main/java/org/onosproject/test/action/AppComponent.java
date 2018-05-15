@@ -105,7 +105,8 @@ public class AppComponent {
         // installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installAddFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
-        installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
+        // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
+        installDropFlowRule(deviceId, tableId, "0a000001", 2);
     }
 
     public void pofTestStop() {
@@ -317,4 +318,35 @@ public class AppComponent {
 
         log.info("installModifyFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
+
+    public void installDropFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_drop = DefaultPofActions.drop(1).action();
+        actions.add(action_drop);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_drop: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(1)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("installDropFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
 }
