@@ -23,7 +23,10 @@ import org.onosproject.floodlightpof.protocol.action.OFAction;
 import org.onosproject.floodlightpof.protocol.table.OFFlowTable;
 import org.onosproject.floodlightpof.protocol.table.OFTableType;
 import org.onosproject.net.DeviceId;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
 import org.onosproject.net.device.DeviceAdminService;
+import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.*;
 import org.onosproject.net.flow.criteria.Criteria;
 import org.onosproject.net.flow.criteria.Criterion;
@@ -89,6 +92,8 @@ public class AppComponent {
         log.info("org.onosproject.pof.test.action Started");
         // deviceId = DeviceId.deviceId("pof:ffffffffcd0318d2");
         deviceId = deviceService.getAvailableDevices().iterator().next().id();
+        deviceService.changePortState(deviceId, PortNumber.portNumber(1), true);
+        deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         // send flow table
         tableId = sendPofFlowTable(deviceId);
