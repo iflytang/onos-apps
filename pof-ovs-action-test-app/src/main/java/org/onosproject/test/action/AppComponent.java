@@ -16,9 +16,12 @@
 package org.onosproject.test.action;
 
 import org.apache.felix.scr.annotations.*;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.MacAddress;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.floodlightpof.protocol.OFMatch20;
+import org.onosproject.floodlightpof.protocol.OFPort;
 import org.onosproject.floodlightpof.protocol.action.OFAction;
 import org.onosproject.floodlightpof.protocol.table.OFFlowTable;
 import org.onosproject.floodlightpof.protocol.table.OFTableType;
@@ -80,14 +83,19 @@ public class AppComponent {
     @Activate
     protected void activate() {
         appId = coreService.registerApplication("org.onosproject.test.action");
-        pofTestStart();
+        // pofTestStart();
+        openflowTestStart();
     }
 
     @Deactivate
     protected void deactivate() {
-        pofTestStop();
+        // pofTestStop();
+        openflowTestStop();
     }
 
+    /**
+     * ==================== pof test ==================
+     */
     public void pofTestStart() {
         log.info("org.onosproject.pof.test.action Started");
         // deviceId = DeviceId.deviceId("pof:ffffffffcd0318d2");
@@ -352,6 +360,50 @@ public class AppComponent {
         flowRuleService.applyFlowRules(flowRule.build());
 
         log.info("installDropFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
+    /**
+     * ==================== openflow test ==================
+     */
+    public void openflowTestStart() {
+        log.info("org.onosproject.openflow.test.action Started");
+        // deviceId = DeviceId.deviceId("pof:ffffffffcd0318d2");
+        deviceId = deviceService.getAvailableDevices().iterator().next().id();
+        deviceService.changePortState(deviceId, PortNumber.portNumber(1), true);
+        deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
+
+        /* send flow rules */
+        installControllerFlowRule(deviceId, tableId = 0);
+    }
+
+    public void openflowTestStop() {
+        removeFlowTable(deviceId, tableId = 0);
+        log.info("org.onosproject.openflow.test.action Stopped");
+    }
+
+    public void installControllerFlowRule(DeviceId deviceId, byte tableId) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        // trafficSelector.matchInPort(PortNumber.portNumber(1));
+        trafficSelector.matchEthType(Ethernet.TYPE_IPV4);
+
+        // action: packet in to controller
+        TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
+        PortNumber out_port = PortNumber.CONTROLLER;
+        trafficTreatment.setOutput(out_port)
+                        .build();
+
+        // apply
+        FlowRule flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreatment.build())
+                .withPriority(0)
+                .fromApp(appId)
+                .makePermanent()
+                .build();
+        flowRuleService.applyFlowRules(flowRule);
     }
 
 }
