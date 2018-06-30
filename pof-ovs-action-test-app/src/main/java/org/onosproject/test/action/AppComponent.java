@@ -15,11 +15,15 @@
  */
 package org.onosproject.test.action;
 
+import com.google.common.collect.ImmutableList;
+import jdk.nashorn.internal.ir.annotations.Immutable;
 import org.apache.felix.scr.annotations.*;
 import org.onlab.packet.Ethernet;
+import org.onlab.packet.IpAddress;
 import org.onlab.packet.MacAddress;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
+import org.onosproject.core.GroupId;
 import org.onosproject.floodlightpof.protocol.OFMatch20;
 import org.onosproject.floodlightpof.protocol.OFPort;
 import org.onosproject.floodlightpof.protocol.action.OFAction;
@@ -35,6 +39,7 @@ import org.onosproject.net.flow.criteria.Criteria;
 import org.onosproject.net.flow.criteria.Criterion;
 import org.onosproject.net.flow.instructions.DefaultPofActions;
 import org.onosproject.net.flow.instructions.DefaultPofInstructions;
+import org.onosproject.net.group.*;
 import org.onosproject.net.table.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +71,9 @@ public class AppComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected FlowTableService flowTableService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected GroupService groupService;
+
     private final Logger log = LoggerFactory.getLogger(getClass());
     private ApplicationId appId;
 
@@ -83,13 +91,13 @@ public class AppComponent {
     @Activate
     protected void activate() {
         appId = coreService.registerApplication("org.onosproject.test.action");
-        // pofTestStart();
+//         pofTestStart();
         openflowTestStart();
     }
 
     @Deactivate
     protected void deactivate() {
-        // pofTestStop();
+//         pofTestStop();
         openflowTestStop();
     }
 
@@ -100,8 +108,8 @@ public class AppComponent {
         log.info("org.onosproject.pof.test.action Started");
         // deviceId = DeviceId.deviceId("pof:ffffffffcd0318d2");
         deviceId = deviceService.getAvailableDevices().iterator().next().id();
-        deviceService.changePortState(deviceId, PortNumber.portNumber(1), true);
-        deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
+//        deviceService.changePortState(deviceId, PortNumber.portNumber(1), true);
+//        deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         // send flow table
         tableId = sendPofFlowTable(deviceId);
@@ -114,12 +122,12 @@ public class AppComponent {
         }
 
         /* send flow rules */
-        // installOutputFlowRule(deviceId, tableId, "0a000001", 2);
+         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
         // installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installAddFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
-        installDropFlowRule(deviceId, tableId, "0a000001", 2);
+//        installDropFlowRule(deviceId, tableId, "0a000001", 2);
     }
 
     public void pofTestStop() {
@@ -164,14 +172,16 @@ public class AppComponent {
 
     public void removeFlowTable(DeviceId deviceId, byte tableId) {
         // will delete flow entries first, then delete flow tables
-        flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(tableId));
+        // flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(tableId));
+        flowRuleService.removeFlowRulesById(appId);
     }
 
     public void installOutputFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
-        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        //matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "00000000"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
         // action
@@ -373,10 +383,13 @@ public class AppComponent {
         deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         /* send flow rules */
-        installControllerFlowRule(deviceId, tableId = 0);
+//        installControllerFlowRule(deviceId, tableId = 0);
+        installSelectGroupFlowRule(deviceId, tableId = 0);
+        installGroupActionFlowRule(deviceId, tableId = 0);
     }
 
     public void openflowTestStop() {
+        removeGroupTables(deviceId);
         removeFlowTable(deviceId, tableId = 0);
         log.info("org.onosproject.openflow.test.action Stopped");
     }
@@ -404,6 +417,67 @@ public class AppComponent {
                 .makePermanent()
                 .build();
         flowRuleService.applyFlowRules(flowRule);
+    }
+
+    public void installGroupActionFlowRule(DeviceId deviceId, byte tableId) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        trafficSelector.matchEthType(Ethernet.TYPE_IPV4)
+                       .matchInPort(PortNumber.portNumber(1));
+
+        // action: packet in to controller
+        TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
+        trafficTreatment.group(new GroupId(123))
+                        .build();
+
+        // apply
+        FlowRule flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreatment.build())
+                .withPriority(0)
+                .fromApp(appId)
+                .makePermanent()
+                .build();
+        flowRuleService.applyFlowRules(flowRule);
+    }
+
+    public void installSelectGroupFlowRule(DeviceId deviceId, byte tableId) {
+        GroupId select_group_id1 = new GroupId(123);
+        byte[] keyData = "abcdefg".getBytes();
+        final GroupKey key = new DefaultGroupKey(keyData);
+
+        // bucket1: action = mod_nw_src + output
+        TrafficTreatment.Builder trafficTrement_bucket1 = DefaultTrafficTreatment.builder();
+        trafficTrement_bucket1.setIpSrc(IpAddress.valueOf("10.1.1.1"))
+                              .setOutput(PortNumber.portNumber(2))
+                              .build();
+        short weight1 = 3;
+        GroupBucket bucket1 = DefaultGroupBucket.createSelectGroupBucket(trafficTrement_bucket1.build(), weight1);
+
+        // bucket2: action = mod_nw_dst + output
+        TrafficTreatment.Builder trafficTrement_bucket2 = DefaultTrafficTreatment.builder();
+        trafficTrement_bucket2.setIpDst(IpAddress.valueOf("10.2.2.2"))
+                              .setOutput(PortNumber.portNumber(2))
+                              .build();
+        short weight2 = 5;
+        GroupBucket bucket2 = DefaultGroupBucket.createSelectGroupBucket(trafficTrement_bucket2.build(), weight2);
+
+        // buckets
+        GroupBuckets select_group_buckets = new GroupBuckets(ImmutableList.of(bucket1, bucket2));
+
+        // apply
+        DefaultGroupDescription select_group = new DefaultGroupDescription(deviceId,
+                GroupDescription.Type.SELECT, select_group_buckets, key, select_group_id1.id(), appId);
+        groupService.addGroup(select_group);
+
+    }
+
+    public void removeGroupTables(DeviceId deviceId) {
+        byte[] keyData = "abcdefg".getBytes();
+        final GroupKey key = new DefaultGroupKey(keyData);
+        groupService.removeGroup(deviceId, key, appId);
     }
 
 }
