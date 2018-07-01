@@ -20,6 +20,7 @@ import jdk.nashorn.internal.ir.annotations.Immutable;
 import org.apache.felix.scr.annotations.*;
 import org.onlab.packet.Ethernet;
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
 import org.onlab.packet.MacAddress;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
@@ -384,12 +385,20 @@ public class AppComponent {
 
         /* send flow rules */
 //        installControllerFlowRule(deviceId, tableId = 0);
-        installSelectGroupFlowRule(deviceId, tableId = 0);
-        installGroupActionFlowRule(deviceId, tableId = 0);
+
+        /* test grop table */
+//        installSelectGroupFlowRule(deviceId, tableId = 0);
+//        installGroupActionFlowRule(deviceId, tableId = 0);
+
+        /* test mod_nw_dst */
+        install_openflow_mod_nw_dst_rule(deviceId, tableId = 0);
     }
 
     public void openflowTestStop() {
-        removeGroupTables(deviceId);
+        /* test group table */
+//        removeGroupTables(deviceId);
+
+        /* remove flow rule by appId */
         removeFlowTable(deviceId, tableId = 0);
         log.info("org.onosproject.openflow.test.action Stopped");
     }
@@ -478,6 +487,31 @@ public class AppComponent {
         byte[] keyData = "abcdefg".getBytes();
         final GroupKey key = new DefaultGroupKey(keyData);
         groupService.removeGroup(deviceId, key, appId);
+    }
+
+    public void install_openflow_mod_nw_dst_rule(DeviceId deviceId, byte tableId) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        trafficSelector.matchEthType(Ethernet.TYPE_IPV4)
+                        .matchInPort(PortNumber.portNumber(1));
+
+        // action: packet in to controller
+        TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
+        trafficTreatment.setIpDst(IpAddress.valueOf("10.3.3.2"))
+                        .setOutput(PortNumber.portNumber(2))
+                        .build();
+
+        // apply
+        FlowRule flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreatment.build())
+                .withPriority(0)
+                .fromApp(appId)
+                .makePermanent()
+                .build();
+        flowRuleService.applyFlowRules(flowRule);
     }
 
 }
