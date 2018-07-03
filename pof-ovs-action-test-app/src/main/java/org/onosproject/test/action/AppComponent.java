@@ -387,16 +387,16 @@ public class AppComponent {
 //        installControllerFlowRule(deviceId, tableId = 0);
 
         /* test grop table */
-//        installSelectGroupFlowRule(deviceId, tableId = 0);
-//        installGroupActionFlowRule(deviceId, tableId = 0);
+        installSelectGroupFlowRule(deviceId, tableId = 0);
+        installGroupActionFlowRule(deviceId, tableId = 0);
 
         /* test mod_nw_dst */
-        install_openflow_mod_nw_dst_rule(deviceId, tableId = 0);
+//        install_openflow_mod_nw_dst_rule(deviceId, tableId = 0);
     }
 
     public void openflowTestStop() {
         /* test group table */
-//        removeGroupTables(deviceId);
+        removeGroupTables(deviceId);
 
         /* remove flow rule by appId */
         removeFlowTable(deviceId, tableId = 0);
