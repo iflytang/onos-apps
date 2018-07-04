@@ -92,14 +92,14 @@ public class AppComponent {
     @Activate
     protected void activate() {
         appId = coreService.registerApplication("org.onosproject.test.action");
-//         pofTestStart();
-        openflowTestStart();
+         pofTestStart();
+//        openflowTestStart();
     }
 
     @Deactivate
     protected void deactivate() {
-//         pofTestStop();
-        openflowTestStop();
+         pofTestStop();
+//        openflowTestStop();
     }
 
     /**
@@ -123,16 +123,19 @@ public class AppComponent {
         }
 
         /* send flow rules */
-         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
-        // installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
+//         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
+//         installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installAddFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
 //        installDropFlowRule(deviceId, tableId, "0a000001", 2);
+
+        /* test pof_group_rule */
+        install_pof_group_rule(deviceId, tableId = 0, "0a000001", 0x16, 1);
     }
 
     public void pofTestStop() {
-        removeFlowTable(deviceId, tableId);
+        remove_pof_flow_table(deviceId, tableId);
         log.info("org.onosproject.test.action Stopped");
     }
 
@@ -171,17 +174,22 @@ public class AppComponent {
         return tableId;
     }
 
+    public void remove_pof_flow_table(DeviceId deviceId, byte tableId) {
+        flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(tableId));
+    }
+
     public void removeFlowTable(DeviceId deviceId, byte tableId) {
         // will delete flow entries first, then delete flow tables
         // flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(tableId));
         flowRuleService.removeFlowRulesById(appId);
     }
 
+    // if outport=CONTROLLER, then it will packet_in to controller
     public void installOutputFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
-        //matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+//        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
         matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "00000000"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
@@ -232,7 +240,7 @@ public class AppComponent {
                 .forTable(tableId)
                 .withSelector(trafficSelector.build())
                 .withTreatment(trafficTreamt.build())
-                .withPriority(1)
+                .withPriority(55)
                 .withCookie(newFlowEntryId)
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
@@ -373,6 +381,33 @@ public class AppComponent {
         log.info("installDropFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
+    public void install_pof_group_rule(DeviceId deviceId, byte tableId, String srcIP, int groupId, int priority) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_group = DefaultPofActions.group(groupId).action();
+        actions.add(action_group);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+    }
+
     /**
      * ==================== openflow test ==================
      */
@@ -388,7 +423,7 @@ public class AppComponent {
 
         /* test grop table */
         installSelectGroupFlowRule(deviceId, tableId = 0);
-        installGroupActionFlowRule(deviceId, tableId = 0);
+        installGroupActionFlowRule(deviceId, tableId = 0);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
 
         /* test mod_nw_dst */
 //        install_openflow_mod_nw_dst_rule(deviceId, tableId = 0);
