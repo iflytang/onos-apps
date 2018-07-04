@@ -78,8 +78,11 @@ public class AppComponent {
     private final Logger log = LoggerFactory.getLogger(getClass());
     private ApplicationId appId;
 
-    private byte tableId;
+    private byte tableId;              // used for openflow
     private DeviceId deviceId;
+
+    private byte global_table_id_1;    // used for pof
+    private byte global_table_id_2;    // used for pof
 
     // field_id
     public final short DMAC = 0;
@@ -113,7 +116,15 @@ public class AppComponent {
 //        deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         // send flow table
-        tableId = sendPofFlowTable(deviceId);
+        byte tableId = sendPofFlowTable(deviceId, "FirstEntryTable");
+        byte next_table_id = sendPofFlowTable(deviceId, "AddVlcHeaderTable");
+
+        log.info("pof-ovs-action-test-app: deviceId={}, tableId={}", deviceId, tableId);
+        log.info("pof-ovs-action-test-app: next_table_id={}", next_table_id);
+
+        // used for removing flow_table in pofTestStop()
+        global_table_id_1 = tableId;
+        global_table_id_2 = next_table_id;
 
         // wait 1s
         try {
@@ -125,27 +136,34 @@ public class AppComponent {
         /* send flow rules */
 //         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
 //         installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
-        // installAddFieldFlowRule(deviceId, tableId, "0a000001", 2);
+//         installAddFieldFlowRule(deviceId, tableId, "0a000101", 2);
         // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
 //        installDropFlowRule(deviceId, tableId, "0a000001", 2);
 
         /* test pof_group_rule */
-        install_pof_group_rule(deviceId, tableId = 0, "0a000001", 0x16, 1);
+//        install_pof_group_rule(deviceId, tableId, "0a000001", 0x16, 1);
+
+        /* test write_metadata and add_vlc_header */
+        install_pof_write_metadata_from_packet_entry(deviceId, tableId, next_table_id, "0a000001", 12);
+        install_pof_add_vlc_header_entry(deviceId, next_table_id, "0a000001", 2, 1,
+                (byte) 0x01, (short) 0x0002, (short) 0x0003, (short) 0x0004);
+
     }
 
     public void pofTestStop() {
-        remove_pof_flow_table(deviceId, tableId);
+        remove_pof_flow_table(deviceId, global_table_id_1);
+        remove_pof_flow_table(deviceId, global_table_id_2);
         log.info("org.onosproject.test.action Stopped");
     }
 
-    public byte sendPofFlowTable(DeviceId deviceId) {
+    public byte sendPofFlowTable(DeviceId deviceId, String table_name) {
         byte tableId = (byte) tableStore.getNewGlobalFlowTableId(deviceId, OFTableType.OF_MM_TABLE);
 
         OFMatch20 srcIP = new OFMatch20();
         srcIP.setFieldId((short) SIP);
         srcIP.setFieldName("srcIP");
-        srcIP.setOffset((short) 204);
+        srcIP.setOffset((short) 208);
         srcIP.setLength((short) 32);
 
         ArrayList<OFMatch20> match20List = new ArrayList<>();
@@ -153,7 +171,7 @@ public class AppComponent {
 
         OFFlowTable ofFlowTable = new OFFlowTable();
         ofFlowTable.setTableId(tableId);
-        ofFlowTable.setTableName("FirstEntryTable");
+        ofFlowTable.setTableName(table_name);
         ofFlowTable.setMatchFieldList(match20List);
         ofFlowTable.setMatchFieldNum((byte) 1);
         ofFlowTable.setTableSize(32);
@@ -408,6 +426,127 @@ public class AppComponent {
         flowRuleService.applyFlowRules(flowRule.build());
     }
 
+    public void install_pof_write_metadata_from_packet_entry(DeviceId deviceId, int tableId, int next_table_id,
+                                                             String srcIP, int priority) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // metadata bits
+        short metadata_offset = 32;
+        short udp_len_offset = 304;    // the offset of `len` field in udp
+        short write_len = 16;          // the length of `len` field in udp
+
+        // next_table_match_field (should same as next_table), here is still srcIP
+        OFMatch20 next_table_match_srcIP = new OFMatch20();
+        next_table_match_srcIP.setFieldId(SIP);
+        next_table_match_srcIP.setFieldName("srcIP");
+        next_table_match_srcIP.setOffset((short) 208);
+        next_table_match_srcIP.setLength((short) 32);
+
+        ArrayList<OFMatch20> match20List = new ArrayList<>();
+        match20List.add(next_table_match_srcIP);
+
+        byte next_table_match_field_num = 1;
+        short next_table_packet_offset = 0;
+
+        // instruction
+        TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
+        trafficTreatment.add(DefaultPofInstructions
+                .writeMetadataFromPacket(metadata_offset, udp_len_offset, write_len));
+        trafficTreatment.add(DefaultPofInstructions
+                .gotoTable((byte) next_table_id, next_table_match_field_num, next_table_packet_offset, match20List));
+//                .gotoDirectTable((byte) next_table_id, (byte) 0, (short) 0, 0, new OFMatch20()));
+
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreatment.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+    }
+
+    public void install_pof_add_vlc_header_entry(DeviceId deviceId, int tableId, String srcIP, int outport, int priority,
+                                             byte timeSlot, short ledId, short ueId, short serviceId) {
+        // vlc header
+        short type = 0x1918;
+        short len = 0x000b;      // type:2 + len:2 + ts:1 + ledID:2 + ueID:2 + serviceId:2 = 11
+        short vlc_offset = 336;  // begin of udp payload: 42*8=336 bits
+        short vlc_length = 88;   // 11 * 8 bits
+        short VLC = 0x16;
+
+        // metadata bits
+        short metadata_offset = 32;
+        short write_len = 16;
+
+        // vlc_header
+        StringBuilder vlc_header = new StringBuilder();
+        vlc_header.append(short2HexStr(type));
+        vlc_header.append(short2HexStr(len));
+        vlc_header.append(byte2HexStr(timeSlot));
+        vlc_header.append(short2HexStr(ledId));
+        vlc_header.append(short2HexStr(ueId));
+        vlc_header.append(short2HexStr(serviceId));
+
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action: add vlc header
+        TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_add_vlc_field = DefaultPofActions.addField(VLC, vlc_offset, vlc_length, vlc_header.toString())
+                .action();
+
+        // used for set_field_from_metadata
+        OFMatch20 metadata_udp_len = new OFMatch20();
+        metadata_udp_len.setFieldName("metadata_udp_len");
+        metadata_udp_len.setFieldId(OFMatch20.METADATA_FIELD_ID);
+        metadata_udp_len.setOffset((short) (vlc_offset + 16));     // the packet_field_offset
+        metadata_udp_len.setLength(write_len);                     // the packet_field_len
+
+        // used for modify_field
+        OFMatch20 vlc_len_field = new OFMatch20();
+        vlc_len_field.setFieldName("vlc_len");
+        vlc_len_field.setFieldId(len);
+        vlc_len_field.setOffset((short) (vlc_offset + 16));
+        vlc_len_field.setLength((short) 16);
+
+        // vlc_len = vlc.header + udp.payload, so metadata minus udp.header
+        short vlc_len = (short) (len - 8);
+        OFAction action_set_vlc_len = DefaultPofActions.setFieldFromMetadata(metadata_udp_len, metadata_offset)
+                .action();
+        OFAction action_inc_vlc_len = DefaultPofActions.modifyField(vlc_len_field, vlc_len)
+                .action();
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport)
+                .action();
+
+        actions.add(action_add_vlc_field);
+        actions.add(action_set_vlc_len);
+        actions.add(action_inc_vlc_len);
+        actions.add(action_output);
+        trafficTreatment.add(DefaultPofInstructions.applyActions(actions));
+
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreatment.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+    }
+
     /**
      * ==================== openflow test ==================
      */
@@ -547,6 +686,40 @@ public class AppComponent {
                 .makePermanent()
                 .build();
         flowRuleService.applyFlowRules(flowRule);
+    }
+
+
+    /**
+     * util tools.
+     */
+
+    public String short2HexStr(short shortNum) {
+        StringBuilder hex_str = new StringBuilder();
+        byte[] b = new byte[2];
+        b[1] = (byte) (shortNum & 0xff);
+        b[0] = (byte) ((shortNum >> 8) & 0xff);
+
+        return bytes_to_hex_str(b);
+    }
+
+    public String byte2HexStr(byte byteNum) {
+        String hex = Integer.toHexString(   byteNum & 0xff);
+        if (hex.length() == 1) {
+            hex = '0' + hex;
+        }
+        return hex;
+    }
+
+    public String bytes_to_hex_str(byte[] b) {
+        StringBuilder hex_str = new StringBuilder();
+        for (int i = 0; i < b.length; i++) {
+            String hex = Integer.toHexString(b[i] & 0xff);
+            if (hex.length() == 1) {
+                hex = '0' + hex;
+            }
+            hex_str.append(hex);
+        }
+        return hex_str.toString();
     }
 
 }
