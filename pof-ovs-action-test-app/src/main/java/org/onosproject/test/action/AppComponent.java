@@ -136,7 +136,6 @@ public class AppComponent {
         /* send flow rules */
 //         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
 //         installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
-//         installAddFieldFlowRule(deviceId, tableId, "0a000101", 2);
         // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
 //        installDropFlowRule(deviceId, tableId, "0a000001", 2);
@@ -145,10 +144,21 @@ public class AppComponent {
 //        install_pof_group_rule(deviceId, tableId, "0a000001", 0x16, 1);
 
         /* test write_metadata and add_vlc_header */
-        install_pof_write_metadata_from_packet_entry(deviceId, tableId, next_table_id, "0a000001", 12);
-        install_pof_add_vlc_header_entry(deviceId, next_table_id, "0a000001", 2, 1,
-                (byte) 0x01, (short) 0x0002, (short) 0x0003, (short) 0x0004);
+//        install_pof_write_metadata_from_packet_entry(deviceId, tableId, next_table_id, "0a000001", 12);
+//        install_pof_add_vlc_header_entry(deviceId, next_table_id, "0a000001", 2, 1,
+//                (byte) 0x01, (short) 0x0002, (short) 0x0003, (short) 0x0004);
 
+        /* test add static field flow rule */
+        install_pof_add_static_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test set_field flow rule (set_dst_ip) */
+//        install_pof_set_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test modify_field flow rule */
+//        install_pof_modify_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test delete_field flow rule */
+//        install_pof_delete_field_rule(deviceId, tableId, "0a000001", 2, 12);
     }
 
     public void pofTestStop() {
@@ -234,19 +244,23 @@ public class AppComponent {
         log.info("installOutputFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
-    public void installSetFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+    public void install_pof_set_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
-        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
         // action
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
-        OFAction action_set_field = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
+        OFAction action_set_dstIp = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
+        OFAction action_set_srcIp = DefaultPofActions.setField(SIP, (short) 208, (short) 32, "0a010101", "ffffffff").action();
+        OFAction action_set_ttl = DefaultPofActions.setField(TTL, (short) 176, (short) 8, "66", "ff").action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
-        actions.add(action_set_field);
+        actions.add(action_set_dstIp);
+        actions.add(action_set_srcIp);
+        actions.add(action_set_ttl);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_set_field: {}.", actions);
@@ -258,7 +272,7 @@ public class AppComponent {
                 .forTable(tableId)
                 .withSelector(trafficSelector.build())
                 .withTreatment(trafficTreamt.build())
-                .withPriority(55)
+                .withPriority(priority)
                 .withCookie(newFlowEntryId)
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
@@ -266,19 +280,26 @@ public class AppComponent {
         log.info("installSetFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
-    public void installAddFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+    public void install_pof_add_static_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
-        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
         // action
+        short field_id1 = 17;
+        short field_id2 = 18;
+        short field_id3 = 19;
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
-        OFAction action_add_field = DefaultPofActions.addField(TEST, (short) 272, (short) 16, "0908").action();
+        OFAction action_add_field1 = DefaultPofActions.addField(field_id1, (short) 272, (short) 16, "0908").action();
+        OFAction action_add_field2 = DefaultPofActions.addField(field_id2, (short) 272, (short) 16, "1918").action();
+        OFAction action_add_field3 = DefaultPofActions.addField(field_id3, (short) 272, (short) 16, "2928").action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
-        actions.add(action_add_field);
+        actions.add(action_add_field1);
+        actions.add(action_add_field2);
+        actions.add(action_add_field3);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_add_field: {}.", actions);
@@ -290,7 +311,7 @@ public class AppComponent {
                 .forTable(tableId)
                 .withSelector(trafficSelector.build())
                 .withTreatment(trafficTreamt.build())
-                .withPriority(1)
+                .withPriority(priority)
                 .withCookie(newFlowEntryId)
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
@@ -298,7 +319,7 @@ public class AppComponent {
         log.info("installAddFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
-    public void installDeleteFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+    public void install_pof_delete_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
@@ -306,11 +327,15 @@ public class AppComponent {
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
         // action
+        short field_id1 = 17;
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
         OFAction action_delete_field = DefaultPofActions.deleteField((short) 272, (short) 16).action();
+        OFAction action_delete_field1 = DefaultPofActions.deleteField((short) 272, (short) 16).action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_delete_field);
+        actions.add(action_delete_field1);
+        actions.add(action_delete_field1);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_delete_field: {}.", actions);
@@ -322,7 +347,7 @@ public class AppComponent {
                 .forTable(tableId)
                 .withSelector(trafficSelector.build())
                 .withTreatment(trafficTreamt.build())
-                .withPriority(1)
+                .withPriority(priority)
                 .withCookie(newFlowEntryId)
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
@@ -330,26 +355,44 @@ public class AppComponent {
         log.info("installDeleteFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
-    public void installModifyFieldFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+    public void install_pof_modify_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
         matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
-        // modified field
+        // modify ttl
         OFMatch20 FIELD_TTL = new OFMatch20();
         FIELD_TTL.setFieldName("TTL");
         FIELD_TTL.setFieldId(TTL);
         FIELD_TTL.setOffset((short) 176);
         FIELD_TTL.setLength((short) 8);
 
+        // modify srcIp's last byte
+        OFMatch20 FIELD_SIP = new OFMatch20();
+        FIELD_SIP.setFieldName("SIP");
+        FIELD_SIP.setFieldId(SIP);
+        FIELD_SIP.setOffset((short) (208 + 24));
+        FIELD_SIP.setLength((short) 8);
+
+        // modify dstIp's last byte
+        OFMatch20 FIELD_DIP = new OFMatch20();
+        FIELD_DIP.setFieldName("DIP");
+        FIELD_DIP.setFieldId(DIP);
+        FIELD_DIP.setOffset((short) (240 + 24));
+        FIELD_DIP.setLength((short) 8);
+
         // action
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
-        OFAction action_delete_field = DefaultPofActions.modifyField(FIELD_TTL, 65535).action();
+        OFAction action_modify_ttl = DefaultPofActions.modifyField(FIELD_TTL, 65535).action();
+        OFAction action_modify_dip = DefaultPofActions.modifyField(FIELD_DIP, 12).action();
+        OFAction action_modify_sip = DefaultPofActions.modifyField(FIELD_SIP, 12).action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
-        actions.add(action_delete_field);
+        actions.add(action_modify_ttl);
+        actions.add(action_modify_dip);
+        actions.add(action_modify_sip);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_modify_field: {}.", actions);
@@ -361,7 +404,7 @@ public class AppComponent {
                 .forTable(tableId)
                 .withSelector(trafficSelector.build())
                 .withTreatment(trafficTreamt.build())
-                .withPriority(1)
+                .withPriority(priority)
                 .withCookie(newFlowEntryId)
                 .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
