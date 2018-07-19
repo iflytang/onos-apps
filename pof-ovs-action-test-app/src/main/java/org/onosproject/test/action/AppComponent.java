@@ -141,7 +141,14 @@ public class AppComponent {
 //        installDropFlowRule(deviceId, tableId, "0a000001", 2);
 
         /* test pof_group_rule */
-        install_pof_select_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1);
+        install_pof_all_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1, true, "def");
+        install_pof_group_rule(deviceId, tableId, "0a000001", 0x16, 1);
+        try {
+            Thread.sleep(3000);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+//        install_pof_select_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1, false, "def");
 //        install_pof_group_rule(deviceId, tableId, "0a000001", 0x33, 1);
 
         /* test write_metadata and add_vlc_header */
@@ -164,7 +171,8 @@ public class AppComponent {
 
     public void pofTestStop() {
         /* remove group tables */
-        remove_pof_group_tables(deviceId);
+        remove_pof_group_tables(deviceId, "abc");
+        remove_pof_group_tables(deviceId, "def");
 
         remove_pof_flow_table(deviceId, global_table_id_1);
         remove_pof_flow_table(deviceId, global_table_id_2);
@@ -207,6 +215,7 @@ public class AppComponent {
     }
 
     public void remove_pof_flow_table(DeviceId deviceId, byte tableId) {
+        flowRuleService.removeFlowRulesById(appId);  // for ovs-pof
         flowTableService.removeFlowTablesByTableId(deviceId, FlowTableId.valueOf(tableId));
     }
 
@@ -473,10 +482,11 @@ public class AppComponent {
         flowRuleService.applyFlowRules(flowRule.build());
     }
 
-    public void install_pof_select_group_rule(DeviceId deviceId, byte tableId, String srcIP,String key_str, int groupId, int priority) {
+    public void install_pof_select_group_rule(DeviceId deviceId, byte tableId, String srcIP,String old_key_str, int groupId,
+                                              int priority, boolean is_add, String new_key_str) {
         GroupId select_group_id = new GroupId(groupId);
 
-        byte[] keyData = key_str.getBytes();
+        byte[] keyData = old_key_str.getBytes();
         final GroupKey key = new DefaultGroupKey(keyData);
 
         // out_port
@@ -502,7 +512,7 @@ public class AppComponent {
         OFAction action_set_dstIp2 = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a020202", "ffffffff").action();
         OFAction action_add_field1 = DefaultPofActions.addField(TEST, (short) 272, (short) 16, "0908").action();
         OFAction action_output2 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port2).action();
-//        actions_bucket2.add(action_set_dstIp2);
+        actions_bucket2.add(action_set_dstIp2);
         actions_bucket2.add(action_add_field1);
         actions_bucket2.add(action_output2);
         trafficTreatment_bucket2.add(DefaultPofInstructions.applyActions(actions_bucket2));
@@ -518,11 +528,82 @@ public class AppComponent {
         // apply
         DefaultGroupDescription select_group = new DefaultGroupDescription(deviceId,
                 GroupDescription.Type.SELECT, select_group_buckets, key, select_group_id.id(), appId);
-        groupService.addGroup(select_group);
+
+        if (is_add) {  // add group
+            log.info("Add group table");
+            groupService.addGroup(select_group);
+        } else {      // mod group
+            log.info("Mod group table");
+            byte[] new_keyData = new_key_str.getBytes();
+            final GroupKey new_key = new DefaultGroupKey(new_keyData);
+            GroupBuckets new_buckets = new GroupBuckets(ImmutableList.of(bucket2));
+            groupService.setBucketsForGroup(deviceId, key, new_buckets, new_key, appId);
+        }
+
     }
 
-    public void remove_pof_group_tables(DeviceId deviceId) {
-        byte[] keyData = "abc".getBytes();
+    public void install_pof_all_group_rule(DeviceId deviceId, byte tableId, String srcIP,String old_key_str, int groupId,
+                                              int priority, boolean is_add, String new_key_str) {
+        GroupId select_group_id = new GroupId(groupId);
+
+        byte[] keyData = old_key_str.getBytes();
+        final GroupKey key = new DefaultGroupKey(keyData);
+
+        // out_port
+        int port1 = 1;
+        int port2 = 2;
+
+        // bucket1: action
+        TrafficTreatment.Builder trafficTreatment_bucket1 = DefaultTrafficTreatment.builder();
+        List<OFAction> actions_bucket1 = new ArrayList<>();
+        OFAction action_set_dstIp1 = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
+        OFAction action_output1 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port2).action();
+        actions_bucket1.add(action_set_dstIp1);
+        actions_bucket1.add(action_output1);
+        trafficTreatment_bucket1.add(DefaultPofInstructions.applyActions(actions_bucket1));
+
+        // bucket1: weight
+        short weight1 = 3;
+        GroupBucket bucket1 = DefaultGroupBucket.createAllGroupBucket(trafficTreatment_bucket1.build());
+
+        // bucket2: action
+        TrafficTreatment.Builder trafficTreatment_bucket2 = DefaultTrafficTreatment.builder();
+        List<OFAction> actions_bucket2 = new ArrayList<>();
+        OFAction action_set_dstIp2 = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a020202", "ffffffff").action();
+        OFAction action_add_field1 = DefaultPofActions.addField(TEST, (short) 272, (short) 16, "0908").action();
+        OFAction action_output2 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port2).action();
+        actions_bucket2.add(action_set_dstIp2);
+        actions_bucket2.add(action_add_field1);
+        actions_bucket2.add(action_output2);
+        trafficTreatment_bucket2.add(DefaultPofInstructions.applyActions(actions_bucket2));
+
+        // bucket2: weight
+        short weight2 = 5;
+        GroupBucket bucket2 = DefaultGroupBucket.createAllGroupBucket(trafficTreatment_bucket2.build());
+
+        // buckets
+        GroupBuckets all_group_buckets = new GroupBuckets(ImmutableList.of(bucket1, bucket2));
+//        GroupBuckets select_group_buckets = new GroupBuckets(ImmutableList.of(bucket1));
+
+        // apply
+        DefaultGroupDescription all_group = new DefaultGroupDescription(deviceId,
+                GroupDescription.Type.ALL, all_group_buckets, key, select_group_id.id(), appId);
+
+        if (is_add) {  // add group
+            log.info("Add group table");
+            groupService.addGroup(all_group);
+        } else {      // mod group
+            log.info("Mod group table");
+            byte[] new_keyData = new_key_str.getBytes();
+            final GroupKey new_key = new DefaultGroupKey(new_keyData);
+            GroupBuckets new_buckets = new GroupBuckets(ImmutableList.of(bucket2));
+            groupService.setBucketsForGroup(deviceId, key, new_buckets, new_key, appId);
+        }
+
+    }
+
+    public void remove_pof_group_tables(DeviceId deviceId, String key_str) {
+        byte[] keyData = key_str.getBytes();
         final GroupKey key = new DefaultGroupKey(keyData);
         groupService.removeGroup(deviceId, key, appId);
     }
@@ -665,8 +746,9 @@ public class AppComponent {
         installSelectGroupFlowRule(deviceId, tableId = 0, "abc",0x12);
         installGroupActionFlowRule(deviceId, tableId = 0, 0x12);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
 
-        installSelectGroupFlowRule(deviceId, tableId = 0, "def", 0x24);
-        installGroupActionFlowRule(deviceId, tableId = 0, 0x24);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
+        /* test second group table send */
+//        installSelectGroupFlowRule(deviceId, tableId = 0, "def", 0x24);
+//        installGroupActionFlowRule(deviceId, tableId = 0, 0x24);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
 
         /* test mod_nw_dst */
 //        install_openflow_mod_nw_dst_rule(deviceId, tableId = 0);
@@ -674,7 +756,8 @@ public class AppComponent {
 
     public void openflowTestStop() {
         /* test group table */
-        removeGroupTables(deviceId);
+        removeGroupTables(deviceId, "abc");
+        removeGroupTables(deviceId, "def");
 
         /* remove flow rule by appId */
         removeFlowTable(deviceId, tableId = 0);
@@ -761,8 +844,8 @@ public class AppComponent {
 
     }
 
-    public void removeGroupTables(DeviceId deviceId) {
-        byte[] keyData = "abcdefg".getBytes();
+    public void removeGroupTables(DeviceId deviceId, String key_str) {
+        byte[] keyData = key_str.getBytes();
         final GroupKey key = new DefaultGroupKey(keyData);
         groupService.removeGroup(deviceId, key, appId);
     }
