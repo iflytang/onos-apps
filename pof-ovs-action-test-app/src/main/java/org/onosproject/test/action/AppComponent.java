@@ -134,20 +134,23 @@ public class AppComponent {
         }
 
         /* send flow rules */
-//         installOutputFlowRule(deviceId, tableId, "0a000001", (int) PortNumber.CONTROLLER.toLong());
-//         installSetFieldFlowRule(deviceId, tableId, "0a000001", 2);
-        // installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
+//         installOutputFlowRule(deviceId, tableId, "0a000001", 2);
+//         install_pof_set_field_rule(deviceId, tableId, "0a000001", 2, 1);
+//         installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
 //        installDropFlowRule(deviceId, tableId, "0a000001", 2);
 
         /* test pof_group_rule */
-        install_pof_all_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1, true, "def");
-        install_pof_group_rule(deviceId, tableId, "0a000001", 0x16, 1);
-        try {
-            Thread.sleep(3000);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+//        install_pof_select_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1, true, "def");
+//        install_pof_group_rule(deviceId, tableId, "0a000001", 0x16, 1);
+
+//        try {
+//            Thread.sleep(3000);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+
+        /* test mod pof_group_rule */
 //        install_pof_select_group_rule(deviceId, tableId, "0a000001", "abc", 0x16, 1, false, "def");
 //        install_pof_group_rule(deviceId, tableId, "0a000001", 0x33, 1);
 
@@ -158,6 +161,9 @@ public class AppComponent {
 
         /* test add static field flow rule */
 //        install_pof_add_static_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test add dynamic INT field flow rule */
+        install_pof_add_dynamic_field_rule(deviceId, tableId, "0a000001", 2, 12);
 
         /* test set_field flow rule (set_dst_ip) */
 //        install_pof_set_field_rule(deviceId, tableId, "0a000001", 2, 12);
@@ -172,7 +178,7 @@ public class AppComponent {
     public void pofTestStop() {
         /* remove group tables */
         remove_pof_group_tables(deviceId, "abc");
-        remove_pof_group_tables(deviceId, "def");
+//        remove_pof_group_tables(deviceId, "def");
 
         remove_pof_flow_table(deviceId, global_table_id_1);
         remove_pof_flow_table(deviceId, global_table_id_2);
@@ -196,7 +202,7 @@ public class AppComponent {
         ofFlowTable.setTableName(table_name);
         ofFlowTable.setMatchFieldList(match20List);
         ofFlowTable.setMatchFieldNum((byte) 1);
-        ofFlowTable.setTableSize(32);
+        ofFlowTable.setTableSize(2);
         ofFlowTable.setTableType(OFTableType.OF_MM_TABLE);
         ofFlowTable.setCommand(null);
         ofFlowTable.setKeyLength((short) 32);
@@ -230,8 +236,8 @@ public class AppComponent {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
-//        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
-        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "00000000"));
+        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+//        matchList.add(Criteria.matchOffsetLength((short) SIP, (short) 208, (short) 32, srcIP, "00000000"));
         trafficSelector.add(Criteria.matchOffsetLength(matchList));
 
         // action
@@ -267,8 +273,8 @@ public class AppComponent {
         // action
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
-        OFAction action_set_dstIp = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
-        OFAction action_set_srcIp = DefaultPofActions.setField(SIP, (short) 208, (short) 32, "0a010101", "ffffffff").action();
+        OFAction action_set_dstIp = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a020202", "ffffffff").action();
+        OFAction action_set_srcIp = DefaultPofActions.setField(SIP, (short) 208, (short) 32, "0a0a0a0a", "ffffffff").action();
         OFAction action_set_ttl = DefaultPofActions.setField(TTL, (short) 176, (short) 8, "66", "ff").action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_set_dstIp);
@@ -330,6 +336,42 @@ public class AppComponent {
         flowRuleService.applyFlowRules(flowRule.build());
 
         log.info("installAddFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
+
+    public void install_pof_add_dynamic_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        short field_id1 = -1;
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_add_field1 = DefaultPofActions.addField(field_id1, (short) 272, (short) 16, "1f").action();
+
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
+        actions.add(action_add_field1);
+
+        actions.add(action_output);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_add_field: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("install_pof_dynamic_field_flow_rule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
 
     public void install_pof_delete_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
@@ -503,7 +545,7 @@ public class AppComponent {
         trafficTreatment_bucket1.add(DefaultPofInstructions.applyActions(actions_bucket1));
 
         // bucket1: weight
-        short weight1 = 3;
+        short weight1 = 2;
         GroupBucket bucket1 = DefaultGroupBucket.createSelectGroupBucket(trafficTreatment_bucket1.build(), weight1);
 
         // bucket2: action
@@ -518,7 +560,7 @@ public class AppComponent {
         trafficTreatment_bucket2.add(DefaultPofInstructions.applyActions(actions_bucket2));
 
         // bucket2: weight
-        short weight2 = 5;
+        short weight2 = 3;
         GroupBucket bucket2 = DefaultGroupBucket.createSelectGroupBucket(trafficTreatment_bucket2.build(), weight2);
 
         // buckets
@@ -740,11 +782,11 @@ public class AppComponent {
         deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         /* send flow rules */
-//        installControllerFlowRule(deviceId, tableId = 0);
+        installControllerFlowRule(deviceId, tableId = 0);
 
         /* test grop table */
-        installSelectGroupFlowRule(deviceId, tableId = 0, "abc",0x12);
-        installGroupActionFlowRule(deviceId, tableId = 0, 0x12);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
+//        installSelectGroupFlowRule(deviceId, tableId = 0, "abc",0x12);
+//        installGroupActionFlowRule(deviceId, tableId = 0, 0x12);   // if just send group_action, then OFBAC_BAD_OUT_GROUP
 
         /* test second group table send */
 //        installSelectGroupFlowRule(deviceId, tableId = 0, "def", 0x24);
@@ -772,7 +814,7 @@ public class AppComponent {
 
         // action: packet in to controller
         TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
-        PortNumber out_port = PortNumber.CONTROLLER;
+        PortNumber out_port = PortNumber.portNumber(2);
         trafficTreatment.setOutput(out_port)
                         .build();
 
@@ -820,10 +862,10 @@ public class AppComponent {
 
         // bucket1: action = mod_nw_src + output
         TrafficTreatment.Builder trafficTrement_bucket1 = DefaultTrafficTreatment.builder();
-        trafficTrement_bucket1.setIpSrc(IpAddress.valueOf("10.1.1.1"))
+        trafficTrement_bucket1.setIpDst(IpAddress.valueOf("10.1.1.2"))
                               .setOutput(PortNumber.portNumber(2))
                               .build();
-        short weight1 = 3;
+        short weight1 = 2;
         GroupBucket bucket1 = DefaultGroupBucket.createSelectGroupBucket(trafficTrement_bucket1.build(), weight1);
 
         // bucket2: action = mod_nw_dst + output
@@ -831,7 +873,7 @@ public class AppComponent {
         trafficTrement_bucket2.setIpDst(IpAddress.valueOf("10.2.2.2"))
                               .setOutput(PortNumber.portNumber(2))
                               .build();
-        short weight2 = 5;
+        short weight2 = 3;
         GroupBucket bucket2 = DefaultGroupBucket.createSelectGroupBucket(trafficTrement_bucket2.build(), weight2);
 
         // buckets
