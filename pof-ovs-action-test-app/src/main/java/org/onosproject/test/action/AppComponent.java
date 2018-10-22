@@ -134,7 +134,7 @@ public class AppComponent {
         }
 
         /* send flow rules */
-//         installOutputFlowRule(deviceId, tableId, "0a000001", 2);
+//         install_pof_output_flow_rule(deviceId, tableId, "0a000001", 2, 12);
 //         install_pof_set_field_rule(deviceId, tableId, "0a000001", 2, 1);
 //         installDeleteFieldFlowRule(deviceId, tableId, "0a000001", 2);
         // installModifyFieldFlowRule(deviceId, tableId, "0a000001", 2);
@@ -163,7 +163,7 @@ public class AppComponent {
 //        install_pof_add_static_field_rule(deviceId, tableId, "0a000001", 2, 12);
 
         /* test add dynamic INT field flow rule */
-        install_pof_add_dynamic_field_rule(deviceId, tableId, "0a000001", 2, 12);
+//        install_pof_add_dynamic_field_rule(deviceId, tableId, "0a000001", 2, 12);
 
         /* test set_field flow rule (set_dst_ip) */
 //        install_pof_set_field_rule(deviceId, tableId, "0a000001", 2, 12);
@@ -173,6 +173,12 @@ public class AppComponent {
 
         /* test delete_field flow rule */
 //        install_pof_delete_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test delete_trunc_field flow rule */
+        install_pof_delete_trunc_field_rule(deviceId, tableId, "0a000001", 2, 12);
+
+        /* test delete_int_field flow rule */
+//        install_pof_delete_int_field_rule(deviceId, tableId, "0a000001", 2, 12);
     }
 
     public void pofTestStop() {
@@ -232,7 +238,7 @@ public class AppComponent {
     }
 
     // if outport=CONTROLLER, then it will packet_in to controller
-    public void installOutputFlowRule(DeviceId deviceId, byte tableId, String srcIP, int outport) {
+    public void install_pof_output_flow_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
         ArrayList<Criterion> matchList = new ArrayList<>();
@@ -255,7 +261,7 @@ public class AppComponent {
                                                    .forTable(tableId)
                                                    .withSelector(trafficSelector.build())
                                                    .withTreatment(trafficTreamt.build())
-                                                   .withPriority(1)
+                                                   .withPriority(priority)
                                                    .withCookie(newFlowEntryId)
                                                    .makePermanent();
         flowRuleService.applyFlowRules(flowRule.build());
@@ -274,12 +280,12 @@ public class AppComponent {
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
         OFAction action_set_dstIp = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a020202", "ffffffff").action();
-        OFAction action_set_srcIp = DefaultPofActions.setField(SIP, (short) 208, (short) 32, "0a0a0a0a", "ffffffff").action();
-        OFAction action_set_ttl = DefaultPofActions.setField(TTL, (short) 176, (short) 8, "66", "ff").action();
+//        OFAction action_set_srcIp = DefaultPofActions.setField(SIP, (short) 208, (short) 32, "0a0a0a0a", "ffffffff").action();
+//        OFAction action_set_ttl = DefaultPofActions.setField(TTL, (short) 176, (short) 8, "66", "ff").action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_set_dstIp);
-        actions.add(action_set_srcIp);
-        actions.add(action_set_ttl);
+//        actions.add(action_set_srcIp);
+//        actions.add(action_set_ttl);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_set_field: {}.", actions);
@@ -313,12 +319,12 @@ public class AppComponent {
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
         OFAction action_add_field1 = DefaultPofActions.addField(field_id1, (short) 272, (short) 16, "0908").action();
-        OFAction action_add_field2 = DefaultPofActions.addField(field_id2, (short) 272, (short) 16, "1918").action();
-        OFAction action_add_field3 = DefaultPofActions.addField(field_id3, (short) 272, (short) 16, "2928").action();
+//        OFAction action_add_field2 = DefaultPofActions.addField(field_id2, (short) 272, (short) 16, "1918").action();
+//        OFAction action_add_field3 = DefaultPofActions.addField(field_id3, (short) 272, (short) 16, "2928").action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_add_field1);
-        actions.add(action_add_field2);
-        actions.add(action_add_field3);
+//        actions.add(action_add_field2);
+//        actions.add(action_add_field3);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_add_field: {}.", actions);
@@ -350,7 +356,9 @@ public class AppComponent {
         short field_id1 = -1;
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
-        OFAction action_add_field1 = DefaultPofActions.addField(field_id1, (short) 272, (short) 16, "1f").action();
+
+        // 0b'00 00 00 00 = x | x | bandwidth | egress_time || ingress_time | out_port | in_port | dpid.
+        OFAction action_add_field1 = DefaultPofActions.addField(field_id1, (short) 272, (short) 16, "20").action();
 
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_add_field1);
@@ -386,11 +394,11 @@ public class AppComponent {
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
         OFAction action_delete_field = DefaultPofActions.deleteField((short) 272, (short) 16).action();
-        OFAction action_delete_field1 = DefaultPofActions.deleteField((short) 272, (short) 16).action();
+//        OFAction action_delete_field1 = DefaultPofActions.deleteField((short) 272, (short) 16).action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_delete_field);
-        actions.add(action_delete_field1);
-        actions.add(action_delete_field1);
+//        actions.add(action_delete_field1);
+//        actions.add(action_delete_field1);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_delete_field: {}.", actions);
@@ -409,6 +417,77 @@ public class AppComponent {
 
         log.info("installDeleteFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
     }
+
+    /* if 'offset' = -1, then truncate packets into 'len' length from pkt_header. */
+    public void install_pof_delete_trunc_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        short offset = -1;
+        int len = 34;
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_delete_field = DefaultPofActions.deleteField(offset, len).action();
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
+        actions.add(action_delete_field);
+        actions.add(action_output);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_delete_field: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("installDeleteFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
+    /* if 'len' = -1, then delete INT data according to its 'mapInfo', 'offset' defines the start location of INT */
+    public void install_pof_delete_int_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
+        // match
+        TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
+        ArrayList<Criterion> matchList = new ArrayList<>();
+        matchList.add(Criteria.matchOffsetLength(SIP, (short) 208, (short) 32, srcIP, "ffffffff"));
+        trafficSelector.add(Criteria.matchOffsetLength(matchList));
+
+        // action
+        short offset = -1;
+        int len = 34;
+        TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
+        List<OFAction> actions = new ArrayList<>();
+        OFAction action_delete_field = DefaultPofActions.deleteField(offset, len).action();
+        OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
+        actions.add(action_delete_field);
+        actions.add(action_output);
+        trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
+        log.info("action_delete_field: {}.", actions);
+
+        // apply
+        long newFlowEntryId = flowTableStore.getNewFlowEntryId(deviceId, tableId);
+        FlowRule.Builder flowRule = DefaultFlowRule.builder()
+                .forDevice(deviceId)
+                .forTable(tableId)
+                .withSelector(trafficSelector.build())
+                .withTreatment(trafficTreamt.build())
+                .withPriority(priority)
+                .withCookie(newFlowEntryId)
+                .makePermanent();
+        flowRuleService.applyFlowRules(flowRule.build());
+
+        log.info("installDeleteFieldFlowRule: apply to deviceId<{}> tableId<{}>", deviceId.toString(), tableId);
+    }
+
 
     public void install_pof_modify_field_rule(DeviceId deviceId, byte tableId, String srcIP, int outport, int priority) {
         // match
@@ -442,12 +521,12 @@ public class AppComponent {
         TrafficTreatment.Builder trafficTreamt = DefaultTrafficTreatment.builder();
         List<OFAction> actions = new ArrayList<>();
         OFAction action_modify_ttl = DefaultPofActions.modifyField(FIELD_TTL, 65535).action();
-        OFAction action_modify_dip = DefaultPofActions.modifyField(FIELD_DIP, 12).action();
-        OFAction action_modify_sip = DefaultPofActions.modifyField(FIELD_SIP, 12).action();
+//        OFAction action_modify_dip = DefaultPofActions.modifyField(FIELD_DIP, 12).action();
+//        OFAction action_modify_sip = DefaultPofActions.modifyField(FIELD_SIP, 12).action();
         OFAction action_output = DefaultPofActions.output((short) 0, (short) 0, (short) 0, outport).action();
         actions.add(action_modify_ttl);
-        actions.add(action_modify_dip);
-        actions.add(action_modify_sip);
+//        actions.add(action_modify_dip);
+//        actions.add(action_modify_sip);
         actions.add(action_output);
         trafficTreamt.add(DefaultPofInstructions.applyActions(actions));
         log.info("action_modify_field: {}.", actions);
@@ -534,12 +613,14 @@ public class AppComponent {
         // out_port
         int port1 = 1;
         int port2 = 2;
+        int controller_port = (int) PortNumber.CONTROLLER.toLong();
+        int port = port2;
 
         // bucket1: action
         TrafficTreatment.Builder trafficTreatment_bucket1 = DefaultTrafficTreatment.builder();
         List<OFAction> actions_bucket1 = new ArrayList<>();
         OFAction action_set_dstIp1 = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a010102", "ffffffff").action();
-        OFAction action_output1 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port2).action();
+        OFAction action_output1 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port).action();
         actions_bucket1.add(action_set_dstIp1);
         actions_bucket1.add(action_output1);
         trafficTreatment_bucket1.add(DefaultPofInstructions.applyActions(actions_bucket1));
@@ -553,7 +634,7 @@ public class AppComponent {
         List<OFAction> actions_bucket2 = new ArrayList<>();
         OFAction action_set_dstIp2 = DefaultPofActions.setField(DIP, (short) 240, (short) 32, "0a020202", "ffffffff").action();
         OFAction action_add_field1 = DefaultPofActions.addField(TEST, (short) 272, (short) 16, "0908").action();
-        OFAction action_output2 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port2).action();
+        OFAction action_output2 = DefaultPofActions.output((short) 0, (short) 0, (short) 0, port).action();
         actions_bucket2.add(action_set_dstIp2);
         actions_bucket2.add(action_add_field1);
         actions_bucket2.add(action_output2);
@@ -782,7 +863,7 @@ public class AppComponent {
         deviceService.changePortState(deviceId, PortNumber.portNumber(2), true);
 
         /* send flow rules */
-        installControllerFlowRule(deviceId, tableId = 0);
+        install_openflow_output_FlowRule(deviceId, tableId = 0);
 
         /* test grop table */
 //        installSelectGroupFlowRule(deviceId, tableId = 0, "abc",0x12);
@@ -806,11 +887,11 @@ public class AppComponent {
         log.info("org.onosproject.openflow.test.action Stopped");
     }
 
-    public void installControllerFlowRule(DeviceId deviceId, byte tableId) {
+    public void install_openflow_output_FlowRule(DeviceId deviceId, byte tableId) {
         // match
         TrafficSelector.Builder trafficSelector = DefaultTrafficSelector.builder();
-        // trafficSelector.matchInPort(PortNumber.portNumber(1));
-        trafficSelector.matchEthType(Ethernet.TYPE_IPV4);
+         trafficSelector.matchInPort(PortNumber.portNumber(1));
+//        trafficSelector.matchEthType(Ethernet.TYPE_IPV4);
 
         // action: packet in to controller
         TrafficTreatment.Builder trafficTreatment = DefaultTrafficTreatment.builder();
